@@ -15,6 +15,15 @@ Our goals of this exercise are
 
 -   see the **effect of sample size** on detecting differentially expressed genes.
 
+Setup
+-----
+
+``` r
+#install.packages(pkgs = c("ggplot2", "dplyr","tibble"))
+#source("https://bioconductor.org/biocLite.R")
+#biocLite(pkgs = c("DESeq2", "limma"))
+```
+
 R Libraries and Data Import
 ---------------------------
 
@@ -27,9 +36,8 @@ library(DESeq2)
 library(ggplot2)
 library(dplyr)
 library(tibble)
+library(limma)
 ```
-
-#### Setup
 
 #### Load gene information
 
@@ -566,7 +574,6 @@ head(sig_genes)
     ## [6,]               TRUE              TRUE
 
 ``` r
-library(limma)
 sig_genes_counts <- vennCounts(sig_genes)
 
 vennDiagram(sig_genes_counts, cex = 1,names = c("10 reps","3 reps"), circle.col = c("red", "blue"))

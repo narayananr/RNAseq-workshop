@@ -21,6 +21,14 @@ Our goals of this exercise are
 knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 ```
 
+Setup
+-----------------
+```{r installs}
+#install.packages(pkgs = c("ggplot2", "dplyr","tibble"))
+#source("https://bioconductor.org/biocLite.R")
+#biocLite(pkgs = c("DESeq2", "limma"))
+```
+
 R Libraries and Data Import
 ------------------------------------
 #### Load packages
@@ -31,8 +39,8 @@ library(DESeq2)
 library(ggplot2)
 library(dplyr)
 library(tibble)
+library(limma)
 ```
-#### Setup
 
 #### Load gene information
 
@@ -365,7 +373,6 @@ sig_genes_3reps_2 <- comb %in% sig_genes_3reps
 # Generating venn counts to plot venn diagram
 sig_genes <- cbind(sig_genes_10reps_2, sig_genes_3reps_2)
 head(sig_genes)
-library(limma)
 sig_genes_counts <- vennCounts(sig_genes)
 
 vennDiagram(sig_genes_counts, cex = 1,names = c("10 reps","3 reps"), circle.col = c("red", "blue"))
