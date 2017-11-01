@@ -24,9 +24,9 @@ knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 Setup
 -----------------
 ```{r installs}
-#install.packages(pkgs = c("ggplot2", "dplyr","tibble"))
-#source("https://bioconductor.org/biocLite.R")
-#biocLite(pkgs = c("DESeq2", "limma"))
+install.packages(pkgs = c("ggplot2", "dplyr","tibble"))
+source("https://bioconductor.org/biocLite.R")
+biocLite(pkgs = c("DESeq2", "limma"))
 ```
 
 R Libraries and Data Import
