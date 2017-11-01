@@ -1,0 +1,372 @@
+---
+title: 'Differential Expression Analysis by DESeq2'
+author: "Narayanan Raghupathy, The Jackson Laboratory"
+date: "October 29, 2017, RNA-seq workshop at 21st Century Mouse Genetics 2017"
+output: rmarkdown::github_document
+---
+
+One of the most common applications of RNA-seq technology is using it for identifying genes that are differentially expressed between sample groups. Typical examples include differential expression analysis between wild type and mutant samples, or cancer vs normal samples. 
+
+Let us assume that we have quantified total gene expression for all known genes using RNA-seq analysis pipeline discussed earlier for Diversity Outbred mouse populations under different diets. 
+
+We will be using read counts at gene level and the software tool **DESeq2** for doing differential expression analysis on a subset of the DO mice. 
+
+Our goals of this exercise are
+
+* find the genes that are differentially expressed between DO mice under standard **Chow diet** and **High fat diet** in 
+
+* see the **effect of sample size** on detecting differentially expressed genes.
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+R Libraries and Data Import
+------------------------------------
+#### Load packages
+Let us load the R packages and the data needed for the differential expression analysis.
+
+```{r R_package, results="hide"}
+library(DESeq2)
+library(ggplot2)
+library(dplyr)
+library(tibble)
+```
+#### Setup
+
+#### Load gene information
+
+Let us load the data file containing basic gene information that are used in the analysis.
+
+```{r load_gene_info, results="hide"}
+gene_info=read.csv(url("ftp://ftp.jax.org/dgatti/ShortCourse2015/ENSMUSG-gene-info-R84.tsv"),header=FALSE,sep="\t")
+colnames(gene_info)=c("gene_id","gene_name","chr","strand","start","end")
+head(gene_info)
+```
+
+
+#### Load R Data files
+
+Let us load the R object files containing expression data and experimental design information needed for doing  differential expression analysis.
+
+```{r load_Robj, results="hide"}
+load("data/ChickMungeretal2016_DiversityOutbred.rdata")
+load("data/DO192_RNAseq_EMASE_RawCounts.rdata")
+```
+
+#### Data munging
+
+Let us munge the data :-)
+
+```{r data_munging1, results="hide"}
+exp_all= t(expr.rna.192.rawcounts)
+exp_design=data.frame(Sample_ID=rownames(covariates.rna.192),covariates.rna.192,stringsAsFactors = FALSE)
+head(exp_design)
+exp_all[1:5,1:5]
+exp_design[1:5,]
+```
+
+```{r data_munging2}
+exp_design=covariates.rna.192  %>% 
+        select(Diet,Sex) %>%   rownames_to_column('Sample_ID')
+### print few rows of the exp_design 
+head(exp_design)
+```
+
+
+Let us check the samples in the expression data and design data are in the same order.
+```{r exp_data, results="hide"}
+all(colnames(exp_all)==exp_design$sample_ID)
+```
+
+#### Code Challenge
+
+1. Find the number of samples in the data set.
+2. Find the number of genes in the study
+
+
+A quick check for sample mixup
+------------------------------
+Let us do a quick sample mixup check using **Xist** gene expression. Xist is non-coding RNA expressed in females.
+
+Let us plot **Xist** expression in all samples against sex.
+
+```{r helper_function1,results="hide"}
+plot_exp <- function(exp_design, gexp, g_id, g_info, variable="Sex"){
+      # plots gene expression (raw) counts by Sex variable
+      # Arguments:
+      #    exp_design: experimental design data frame containing
+      #                sample IDs, Diet and Sex information           
+      #    gexp:       gene expression data  
+      #    g_id:       ensembl gene ID
+      #    variable:   variable to plot
+      # Output:
+      #     gene expression plot 
+      #
+      if (gene_id %in% rownames(gexp)){
+        g_ind = which(as.vector(g_info$gene_id)==g_id)
+        g_name = as.vector(g_info$gene_name)[g_ind]
+        chro = as.vector(g_info$chr)[g_ind]
+        g_index = which(rownames(gexp)==g_id)
+        exp_data= data.frame(exp_design, 
+                     exp=as.numeric(gexp[g_index,]))
+        if (variable=="Sex"){
+            p <- ggplot(exp_data,aes(x=Sex,y=exp)) 
+            p <- p + geom_point(position = position_jitter(width = 0.2),size=3,
+                    aes(colour = Sex))
+        }else{
+            p <- ggplot(exp_data,aes(x=Diet,y=exp)) 
+            p <- p + geom_point(position = position_jitter(width = 0.2),size=3,
+                    aes(colour = Diet))
+        }
+        p <- p + stat_summary(fun.y=mean, geom="point", shape=5, size=4)
+        p <- p + ylab("Gene Expression (Read Counts)")
+        p <- p + theme(axis.text=element_text(size=12),
+                axis.title=element_text(size=12,face="bold", 
+                                        colour = "blue"),
+                plot.title = element_text(size = rel(1.5)))
+        p <- p + ggtitle(paste0(g_id,": ",g_name," Chr",chro))
+        print(p)
+      }else{
+        print(paste0(gene_id, " not expressed"))
+      }
+}
+```
+
+
+```{r check_xist,results="hide"}
+### Xist ensembl ID
+gene_id='ENSMUSG00000086503'
+### plot Xist expression by Sex using the function
+plot_exp(exp_design, exp_all, gene_id,gene_info)
+plot_exp(exp_design, exp_all, gene_id,gene_info,variable="Diet")
+gene_id='ENSMUSG00000025907'
+plot_exp(exp_design, exp_all, gene_id, gene_info)
+```
+
+
+### Code Challenge
+
+Pick your favorite gene (use ensembl ID) and plot its expression by 
+  
+  1. Sex
+  2. Diet.
+  
+Differential Expression Analysis with **three** samples in each group
+------------------------------------------------------------------
+
+Let us start with an example identifying the genes that are differentially expressed between two diets **Chow** and **High fat**.
+
+Let us first get the sample IDs (mouse IDs).
+
+```{r sample_ind, results="hide"}
+head(exp_design)
+exp_design
+male_chow_ids= exp_design %>% filter(Sex=='M' & Diet=='chow') %>% pull(Sample_ID) 
+male_chow_ids
+male_hf_ids = exp_design %>% filter(Sex=='M' & Diet=='HF') %>% pull(Sample_ID)
+```
+
+To make the example simple, let us subset our expression data such that we have **3 Male DO mice** under **Chow diet** and 3 DO mice under **High Fat diet**.
+```{r sample_size, results="hide"}
+sampleSize = 3
+```
+Later on we will see the effect of sample size by changing it to **10**.
+```{r subset_exp_3}
+diet_3 = c(male_chow_ids[1:sampleSize],male_hf_ids[1:sampleSize])
+exp_design_diet_3 = exp_design %>% filter(Sample_ID %in% diet_3)
+exp_diet_3=exp_all[,diet_3]
+all(colnames(exp_diet_3)==as.vector(exp_design_diet_3$Sample_ID))
+```
+```{r head_exp}
+as.data.frame(head(exp_diet_3))
+dim(exp_diet_3)
+```
+
+Let us filter out genes with zero and low expression.
+
+```{r filter_exp, results="hide"}
+threshold = 200
+exp_mat_diet_3= as.data.frame(exp_diet_3) %>%
+    rownames_to_column('gene_id') %>%
+    filter(rowSums(.[,2:7], na.rm=TRUE)>threshold) %>%
+    column_to_rownames('gene_id')
+dim(exp_mat_diet_3)
+head(exp_mat_diet_3)
+```
+## Differential expression analysis with DESeq2
+
+Let us create data frames for **DESeq2** object 
+
+```{r dataframe_deseq2, results="hide"}
+### colData contains the condition/group information for Differenetial expression analysis
+colData <- DataFrame(group = factor(exp_design_diet_3$Diet))
+```
+```{r deseq2_obj}
+### Create DESeq2 object using expression and colData
+dds_3reps <- DESeqDataSetFromMatrix(countData = as.data.frame(round(exp_mat_diet_3)),
+         colData = colData, design = ~ group)
+dds_3reps <- DESeq(dds_3reps)
+res_3reps = results(dds_3reps)
+resOrdered_3reps <- res_3reps[order(res_3reps$padj),]
+head(resOrdered_3reps)
+```
+
+DE Analysis summary with **3** samples per group 
+-------------------------------------------------
+
+```{r res_summary}
+### summary of Differential Expression analysis
+summary(res_3reps)
+sig_genes_3reps = as.data.frame(res_3reps) %>% 
+                  rownames_to_column('gene_id') %>%
+                  filter(padj<0.1) %>% pull(gene_id)
+length(sig_genes_3reps)
+```
+
+### P-value histogram
+
+Let us plot the histogram of p-values. The p-value histogram is a good diagnostic test for the differential expression analysis.
+
+```{r pval_hist, results="hide"}
+hist(res_3reps$pvalue,breaks=100,col="grey",ylim=c(0,800), xlab="p-value",main="p-value histogram: 3 Samples per group")
+```
+
+### **Top** differentially expressed genes
+```{r r_helper_function2}
+### helper functions to get gene information for a gene
+### plot DESEQ2 object
+deseq_gene_exp_plot <- function(deseq_obj, g_id, g_info){
+      # plots gene expression counts by group variable
+      # used in DESEQ2 object
+      #
+      # Arguments:
+      #    deseq_obj: DESEQ2 object
+      #    g_id:      ensembl gene ID
+      #    g_info:    gene information dataframe
+      #
+      # Output:
+      #     gene expression plot 
+      #
+      g_ind = which(as.vector(g_info$gene_id)==g_id)
+      g_name = as.vector(g_info$gene_name)[g_ind]
+      chro = as.vector(g_info$chr)[g_ind]
+      data <- plotCounts(deseq_obj, gene=g_id, intgroup=c("group"), returnData=TRUE)
+      p <- ggplot(data, aes(x=group, y=count, color=group))
+      p <- p+ ggtitle(paste0(g_id,": ",g_name," Chr",chro))
+      p <- p+ geom_point(position=position_jitter(width=.1,height=0), size=3)
+      p <- p + theme(axis.text=element_text(size=12),              axis.title=element_text(size=20,face="bold", colour = "blue"), 
+            plot.title = element_text(size=rel(1.5)))
+      print(p)
+}
+```
+
+```{r top_gene_plots}
+#par(mfrow=c(2,3),las=1)
+n=3
+top_genes= rownames(resOrdered_3reps[1:n,])
+for (i in 1:length(top_genes)){
+  g_id = top_genes[i]
+  deseq_gene_exp_plot(dds_3reps, g_id, gene_info)
+}
+```
+
+Differential Expression Analysis with **ten** samples in each **diet** group
+------------------------------------------------------------------
+
+```{r subset_exp_10}
+sampleSize=10
+diet_10 = c(male_chow_ids[1:sampleSize],male_hf_ids[1:sampleSize])
+exp_design_diet_10 = exp_design %>% filter(Sample_ID %in% diet_10)
+head(exp_design_diet_10)
+exp_diet_10=exp_all[,diet_10]
+dim(exp_diet_10)
+head(exp_diet_10)
+all(colnames(exp_diet_10)==as.vector(exp_design_diet_10$Sample_ID))
+```
+
+Let us filter out genes with zero and low expression (less than 5 read counts) in 50% of the samples.
+
+```{r filter_exp_10, results="hide"}
+threshold = 2000
+head(exp_diet_10)
+dim(exp_diet_10)
+exp_mat_diet_10= as.data.frame(exp_diet_10) %>%
+    rownames_to_column('gene_id') %>%
+    filter(rowSums(.[,2:ncol(exp_diet_10)+1], na.rm=TRUE)>threshold) %>%
+    column_to_rownames('gene_id')
+dim(exp_mat_diet_10)
+head(exp_mat_diet_10)
+```
+Let us create data frames for DESeq2 object
+```{r dataframe_deseq2_10, results="hide"}
+### colData contains the condition/group information for Differenetial expression analysis
+colData <- DataFrame(group = factor(exp_design_diet_10$Diet))
+```
+```{r deseq2_obj_10, results="hide"}
+### Create DESeq2 object using expression and colData
+dds_10reps <- DESeqDataSetFromMatrix(countData = as.data.frame(round(exp_mat_diet_10)),
+         colData = colData, design = ~ group)
+dds_10reps <- estimateSizeFactors(dds_10reps)
+counts_10reps= counts(dds_10reps, normalized=TRUE)
+dds_10reps <- DESeq(dds_10reps)
+res_10reps = results(dds_10reps)
+resOrdered_10reps <- res_10reps[order(res_10reps$padj),]
+head(resOrdered_10reps)
+
+```
+
+```{r top_gene_plots_10}
+n=3
+top_genes= rownames(resOrdered_10reps[1:n,])
+par(mfrow=c(2,3),las=1)
+for (i in 1:length(top_genes)){
+  g_id = top_genes[i]
+  deseq_gene_exp_plot(dds_10reps, g_id, gene_info)
+}
+```
+
+Differential Gene Expression Analysis Summary  
+---------------------------------------------
+
+### P-value histogram comparison
+```{r pval_hist_10, fig.width=12, fig.height=8}
+par(mfrow=c(1,2))
+hist(res_10reps$pvalue,breaks=100,col="grey", xlab="p-value",ylim=c(0,1000), main="p-value histogram: 10 Samples per group")
+hist(res_3reps$pvalue,breaks=100,ylim=c(0,1000),col="grey", xlab="p-value",main="p-value histogram: 3 Samples per group")
+#rld_10reps <- rlog(dds_10reps, blind = FALSE)
+#plotPCA(rld_10reps, intgroup = c("Diet"))
+```
+
+### DESEQ2 Summary: 3 samples per group
+```{r res_summary_3}
+### summary of Differential Expression analysis
+summary(res_3reps)
+```
+
+### DESEQ2 Summary: 10 samples per group
+```{r res_summary_10}
+### summary of Differential Expression analysis
+summary(res_10reps)
+sig_genes_10reps = as.data.frame(res_10reps) %>% 
+                  rownames_to_column('gene_id') %>%
+                  filter(padj<0.1) %>% pull(gene_id)
+length(sig_genes_10reps)
+length(union(sig_genes_10reps, sig_genes_3reps))
+length(intersect(sig_genes_10reps, sig_genes_3reps))
+
+# Combining the two above..
+comb <- unique(c(sig_genes_10reps, sig_genes_3reps))
+length(comb)
+# Comparing comb with the above two
+sig_genes_10reps_2 <- comb %in% sig_genes_10reps
+sig_genes_3reps_2 <- comb %in% sig_genes_3reps
+
+# Generating venn counts to plot venn diagram
+sig_genes <- cbind(sig_genes_10reps_2, sig_genes_3reps_2)
+head(sig_genes)
+library(limma)
+sig_genes_counts <- vennCounts(sig_genes)
+
+vennDiagram(sig_genes_counts, cex = 1,names = c("10 reps","3 reps"), circle.col = c("red", "blue"))
+```
