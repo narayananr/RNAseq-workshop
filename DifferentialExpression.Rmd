@@ -24,9 +24,9 @@ knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 Setup
 -----------------
 ```{r installs}
-install.packages(pkgs = c("ggplot2", "dplyr","tibble"))
-source("https://bioconductor.org/biocLite.R")
-biocLite(pkgs = c("DESeq2", "limma"))
+#install.packages(pkgs = c("ggplot2", "dplyr","tibble"))
+#source("https://bioconductor.org/biocLite.R")
+#biocLite(pkgs = c("DESeq2", "limma"))
 ```
 
 R Libraries and Data Import
@@ -87,7 +87,7 @@ Let us check the samples in the expression data and design data are in the same 
 all(colnames(exp_all)==exp_design$sample_ID)
 ```
 
-#### Code Challenge
+### Code Challenge
 
 1. Find the number of samples in the data set.
 2. Find the number of genes in the study
