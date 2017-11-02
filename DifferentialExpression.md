@@ -18,6 +18,8 @@ Our goals of this exercise are
 Setup
 -----
 
+-   Download data from <ftp://ftp.jax.org/scm>
+
 ``` r
 #install.packages(pkgs = c("ggplot2", "dplyr","tibble"))
 #source("https://bioconductor.org/biocLite.R")
