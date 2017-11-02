@@ -111,7 +111,7 @@ plot_exp <- function(exp_design, gexp, g_id, g_info, variable="Sex"){
       # Output:
       #     gene expression plot 
       #
-      if (gene_id %in% rownames(gexp)){
+      if (g_id %in% rownames(gexp)){
         g_ind = which(as.vector(g_info$gene_id)==g_id)
         g_name = as.vector(g_info$gene_name)[g_ind]
         chro = as.vector(g_info$chr)[g_ind]

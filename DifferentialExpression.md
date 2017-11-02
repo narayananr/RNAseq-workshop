@@ -91,7 +91,7 @@ Let us check the samples in the expression data and design data are in the same 
 all(colnames(exp_all)==exp_design$sample_ID)
 ```
 
-#### Code Challenge
+### Code Challenge
 
 1.  Find the number of samples in the data set.
 2.  Find the number of genes in the study
@@ -115,7 +115,7 @@ plot_exp <- function(exp_design, gexp, g_id, g_info, variable="Sex"){
       # Output:
       #     gene expression plot 
       #
-      if (gene_id %in% rownames(gexp)){
+      if (g_id %in% rownames(gexp)){
         g_ind = which(as.vector(g_info$gene_id)==g_id)
         g_name = as.vector(g_info$gene_name)[g_ind]
         chro = as.vector(g_info$chr)[g_ind]
