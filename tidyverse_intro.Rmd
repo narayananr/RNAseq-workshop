@@ -14,9 +14,11 @@ library(dplyr)
 ```
 
 ```{r load_data}
-gapminder = read.csv("~/Desktop/gapminder/data/gapminder-FiveYearData.csv",stringsAsFactors = FALSE)
+gapminder_data <- "https://raw.githubusercontent.com/resbaz/r-novice-gapminder-files/master/data/gapminder-FiveYearData.csv"
+gapminder <- read.csv(gapminder_data,stringsAsFactors = FALSE)
 head(gapminder)
 ```
+
 ```{r filter_verb}
 # Filter the gapminder dataset for the year 1957
 head(gapminder %>% filter(year==1957))
